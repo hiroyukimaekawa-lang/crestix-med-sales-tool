@@ -63,8 +63,9 @@ h1 { font-size: 24px; font-weight: 500; letter-spacing: -0.01em; margin-bottom: 
 }
 
 /* Upload */
-.upload-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-@media (max-width: 600px) { .upload-grid { grid-template-columns: 1fr; } }
+.upload-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+@media (max-width: 700px) { .upload-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 400px) { .upload-grid { grid-template-columns: 1fr; } }
 
 .upload-item {
   border: 1px dashed var(--border2);
@@ -97,8 +98,9 @@ h1 { font-size: 24px; font-weight: 500; letter-spacing: -0.01em; margin-bottom: 
 .run-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
 /* Stats */
-.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 1rem; }
-@media (max-width: 600px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
+.stats-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 1rem; }
+@media (max-width: 700px) { .stats-row { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 400px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
 
 .stat {
   background: var(--surface); border: 1px solid var(--border);
@@ -193,7 +195,7 @@ footer {
   <header>
     <div class="app-label"><a href="./">← ツールポータルに戻る</a></div>
     <h1>3媒体統合ツール</h1>
-    <p class="subtitle">DF・MD・マイナビの課金リストを統合し、重複判定・媒体別分類（7パターン）を行います</p>
+    <p class="subtitle">DF・MD・DF_MD・マイナビ新規の課金リストを統合し、重複判定・媒体別分類（7パターン）を行います</p>
   </header>
 
   <div class="card">
@@ -218,10 +220,19 @@ footer {
         </label>
       </div>
 
+      <div class="upload-item" id="box-dfmd">
+        <label>
+          <div class="upload-icon">📄</div>
+          <div class="upload-name">DF_MD課金リスト</div>
+          <div class="upload-status" id="status-dfmd">クリックして選択</div>
+          <input type="file" accept=".csv" onchange="handleFile('dfmd', this)">
+        </label>
+      </div>
+
       <div class="upload-item" id="box-mynavi">
         <label>
           <div class="upload-icon">📋</div>
-          <div class="upload-name">マイナビ</div>
+          <div class="upload-name">マイナビ（新規）</div>
           <div class="upload-status" id="status-mynavi">クリックして選択</div>
           <input type="file" accept=".csv" onchange="handleFile('mynavi', this)">
         </label>
@@ -237,7 +248,8 @@ footer {
     <div class="stats-row">
       <div class="stat"><div class="stat-label">DF</div><div class="stat-value" id="stat-df">—</div></div>
       <div class="stat"><div class="stat-label">MD</div><div class="stat-value" id="stat-md">—</div></div>
-      <div class="stat"><div class="stat-label">マイナビ</div><div class="stat-value" id="stat-mv">—</div></div>
+      <div class="stat"><div class="stat-label">DF_MD</div><div class="stat-value" id="stat-dfmd">—</div></div>
+      <div class="stat"><div class="stat-label">マイナビ新規</div><div class="stat-value" id="stat-mv">—</div></div>
       <div class="stat"><div class="stat-label">統合後（ユニーク）</div><div class="stat-value" id="stat-total">—</div></div>
     </div>
 
@@ -271,8 +283,8 @@ const OUTPUT_SHEETS = [
 /* =====================================================
    ファイル読み込み
 ===================================================== */
-const files   = { df: null, md: null, mynavi: null };
-const parsed  = { df: [], md: [], mynavi: [] };
+const files   = { df: null, md: null, dfmd: null, mynavi: null };
+const parsed  = { df: [], md: [], dfmd: [], mynavi: [] };
 let results   = {};
 
 function handleFile(key, input) {
@@ -325,7 +337,7 @@ function onParsed(key, filename, count) {
 }
 
 function updateRunBtn() {
-  const hasAny = files.df || files.md || files.mynavi;
+  const hasAny = files.df || files.md || files.dfmd || files.mynavi;
   document.getElementById('run-btn').disabled = !hasAny;
 }
 
@@ -422,6 +434,18 @@ function normalizeMdRow(src) {
   return row;
 }
 
+function normalizeDfMdRow(src) {
+  const row = createTemplate();
+  OUTPUT_HEADERS.forEach(h => { row[h] = val(src, h); });
+  row['休診日'] = normalizeDayList(row['休診日']);
+  row['診療日'] = normalizeDayList(row['診療日']);
+  row['午前始'] = normalizeTime(row['午前始']);
+  row['午前終'] = normalizeTime(row['午前終']);
+  row['午後始'] = normalizeTime(row['午後始']);
+  row['午後終'] = normalizeTime(row['午後終']);
+  return row;
+}
+
 function normalizeMynaviRow(src) {
   const row = createTemplate();
   OUTPUT_HEADERS.forEach(h => { row[h] = val(src, h); });
@@ -437,12 +461,13 @@ function normalizeMynaviRow(src) {
 /* =====================================================
    統合ロジック（GASと同等）
 ===================================================== */
-function mergeAllSources(dfRows, mdRows, mynaviRows) {
+function mergeAllSources(dfRows, mdRows, dfmdRows, mynaviRows) {
   const clusters   = [];
   const phoneMap   = new Map();
   const addressMap = new Map();
 
-  // 優先順位が低い順に投入（MD → DF → マイナビ）
+  // 優先順位が低い順に投入（DF_MD → MD → DF → マイナビ）
+  ingestRows(dfmdRows,   'DF_MD',  clusters, phoneMap, addressMap);
   ingestRows(mdRows,     'MD',     clusters, phoneMap, addressMap);
   ingestRows(dfRows,     'DF',     clusters, phoneMap, addressMap);
   ingestRows(mynaviRows, 'マイナビ', clusters, phoneMap, addressMap);
@@ -454,6 +479,7 @@ function ingestRows(rows, sourceName, clusters, phoneMap, addressMap) {
   rows.forEach(src => {
     const normalized = sourceName === 'DF'     ? normalizeDfRow(src)
                      : sourceName === 'MD'     ? normalizeMdRow(src)
+                     : sourceName === 'DF_MD'  ? normalizeDfMdRow(src)
                      : normalizeMynaviRow(src);
 
     const phoneKey   = buildPhoneKey(normalized['Tel1']);
@@ -486,14 +512,14 @@ function ingestRows(rows, sourceName, clusters, phoneMap, addressMap) {
 function createEmptyCluster() {
   const row = {};
   OUTPUT_HEADERS.forEach(h => row[h] = '');
-  return { row, sources: new Set(), sourceRows: { MD: null, DF: null, 'マイナビ': null } };
+  return { row, sources: new Set(), sourceRows: { MD: null, DF: null, 'DF_MD': null, 'マイナビ': null } };
 }
 
 function mergeIntoCluster(cluster, incomingRow, sourceName) {
   cluster.sources.add(sourceName);
   cluster.sourceRows[sourceName] = incomingRow;
 
-  const priority = ['MD', 'DF', 'マイナビ'];
+  const priority = ['DF_MD', 'MD', 'DF', 'マイナビ'];
   const merged = {};
 
   OUTPUT_HEADERS.forEach(header => {
@@ -505,13 +531,16 @@ function mergeIntoCluster(cluster, incomingRow, sourceName) {
   });
 
   cluster.row = merged;
-  cluster.row['DF'] = cluster.sources.has('DF') ? '○' : (hasValue(cluster.row['DF']) ? cluster.row['DF'] : '');
+  cluster.row['DF'] = (cluster.sources.has('DF') || cluster.sources.has('DF_MD')) ? '○' : (hasValue(cluster.row['DF']) ? cluster.row['DF'] : '');
 }
 
 function finalizeCluster(cluster) {
   return {
     row: OUTPUT_HEADERS.map(h => cluster.row[h] || ''),
-    sourceSet: new Set(Array.from(cluster.sources))
+    sourceSet: new Set(Array.from(cluster.sources)),
+    hasDf:     cluster.sources.has('DF') || cluster.sources.has('DF_MD'),
+    hasMd:     cluster.sources.has('MD') || cluster.sources.has('DF_MD'),
+    hasMynavi: cluster.sources.has('マイナビ')
   };
 }
 
@@ -520,14 +549,16 @@ function categorize(merged) {
   OUTPUT_SHEETS.forEach(s => r[s] = []);
 
   merged.forEach(item => {
-    const s = item.sourceSet;
-    if      (s.has('DF') && s.has('MD') && s.has('マイナビ')) r['DF_MD_マイナビ'].push(item.row);
-    else if (s.has('DF') && s.has('MD'))                       r['DF_MD'].push(item.row);
-    else if (s.has('DF') && s.has('マイナビ'))                  r['DF_マイナビ'].push(item.row);
-    else if (s.has('MD') && s.has('マイナビ'))                  r['MD_マイナビ'].push(item.row);
-    else if (s.has('DF'))                                       r['DFのみ'].push(item.row);
-    else if (s.has('MD'))                                       r['MDのみ'].push(item.row);
-    else if (s.has('マイナビ'))                                  r['マイナビのみ'].push(item.row);
+    const df = item.hasDf;
+    const md = item.hasMd;
+    const mv = item.hasMynavi;
+    if      (df && md && mv) r['DF_MD_マイナビ'].push(item.row);
+    else if (df && md)       r['DF_MD'].push(item.row);
+    else if (df && mv)       r['DF_マイナビ'].push(item.row);
+    else if (md && mv)       r['MD_マイナビ'].push(item.row);
+    else if (df)             r['DFのみ'].push(item.row);
+    else if (md)             r['MDのみ'].push(item.row);
+    else if (mv)             r['マイナビのみ'].push(item.row);
   });
 
   return r;
@@ -550,14 +581,10 @@ function runProcess() {
 }
 
 function _run() {
-  const dfRows     = parsed.df.map(normalizeDfRow);     // 正規化
-  const mdRows     = parsed.md.map(normalizeMdRow);
-  const mynaviRows = parsed.mynavi.map(normalizeMynaviRow);
-
-  // 統合
   const merged = mergeAllSources(
     parsed.df,
     parsed.md,
+    parsed.dfmd,
     parsed.mynavi
   );
 
@@ -566,12 +593,13 @@ function _run() {
   // Stats
   document.getElementById('stat-df').textContent    = parsed.df.length     || '—';
   document.getElementById('stat-md').textContent    = parsed.md.length     || '—';
+  document.getElementById('stat-dfmd').textContent  = parsed.dfmd.length   || '—';
   document.getElementById('stat-mv').textContent    = parsed.mynavi.length || '—';
   document.getElementById('stat-total').textContent = merged.length;
 
   // Log
   const logs = [];
-  logs.push({ text: `DF: ${parsed.df.length}件 / MD: ${parsed.md.length}件 / マイナビ: ${parsed.mynavi.length}件`, cls: 'info' });
+  logs.push({ text: `DF: ${parsed.df.length}件 / MD: ${parsed.md.length}件 / DF_MD: ${parsed.dfmd.length}件 / マイナビ: ${parsed.mynavi.length}件`, cls: 'info' });
   logs.push({ text: `統合後ユニーク件数: ${merged.length}件`, cls: 'ok' });
   OUTPUT_SHEETS.forEach(s => {
     logs.push({ text: `${s}: ${results[s].length}件`, cls: '' });
