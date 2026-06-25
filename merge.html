@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3媒体統合ツール | 第一営業部</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #f5f4f0;
+  --surface: #ffffff;
+  --surface2: #f0efe9;
+  --border: #e0dfd8;
+  --border2: #c8c7bf;
+  --text: #1a1918;
+  --text2: #6b6a65;
+  --text3: #9b9a94;
+  --accent: #1a5276;
+  --accent-bg: #eaf0f6;
+  --accent-light: #d0e4f0;
+  --success: #1a6b3c;
+  --success-bg: #eaf6ef;
+  --success-border: #b7dfc8;
+  --radius: 8px;
+  --radius-lg: 12px;
+}
+
+body {
+  font-family: 'Helvetica Neue', 'Hiragino Sans', 'Yu Gothic', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.page { max-width: 900px; margin: 0 auto; padding: 2.5rem 1.5rem 5rem; }
+
+header { margin-bottom: 2rem; }
+.app-label { font-size: 12px; color: var(--text3); margin-bottom: 6px; }
+.app-label a { color: inherit; text-decoration: none; }
+.app-label a:hover { color: var(--accent); }
+h1 { font-size: 24px; font-weight: 500; letter-spacing: -0.01em; margin-bottom: 4px; }
+.subtitle { font-size: 14px; color: var(--text2); }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.card-title {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text3);
+  margin-bottom: 1rem;
+}
+
+/* Upload */
+.upload-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+@media (max-width: 600px) { .upload-grid { grid-template-columns: 1fr; } }
+
+.upload-item {
+  border: 1px dashed var(--border2);
+  border-radius: var(--radius);
+  background: var(--surface2);
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.upload-item:hover { border-color: var(--accent); }
+.upload-item.loaded { border-style: solid; border-color: var(--success); background: var(--success-bg); }
+
+.upload-item label {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 8px; padding: 20px 12px; cursor: pointer; text-align: center;
+}
+.upload-item input[type=file] { display: none; }
+
+.upload-icon { font-size: 24px; }
+.upload-name { font-size: 13px; font-weight: 500; color: var(--text); }
+.upload-status { font-size: 11px; color: var(--text3); }
+.upload-item.loaded .upload-status { color: var(--success); }
+
+/* Run button */
+.run-btn {
+  width: 100%; padding: 14px; font-size: 15px; font-weight: 500;
+  background: var(--accent); color: #fff; border: none;
+  border-radius: var(--radius); cursor: pointer; transition: opacity 0.15s;
+}
+.run-btn:hover:not(:disabled) { opacity: 0.88; }
+.run-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* Stats */
+.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 1rem; }
+@media (max-width: 600px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
+
+.stat {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 12px 14px;
+}
+.stat-label { font-size: 11px; color: var(--text3); margin-bottom: 2px; }
+.stat-value { font-size: 22px; font-weight: 500; color: var(--text); }
+
+/* Log */
+.log-card {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 12px 14px;
+  font-size: 12px; line-height: 2; margin-bottom: 1rem;
+}
+.log-line.ok { color: var(--success); font-weight: 500; }
+.log-line.info { color: var(--accent); }
+
+/* Tabs */
+.tabs-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+
+.tab-nav {
+  display: flex; overflow-x: auto; border-bottom: 1px solid var(--border);
+  background: var(--surface2); scrollbar-width: none;
+}
+.tab-nav::-webkit-scrollbar { display: none; }
+
+.tab-btn {
+  flex-shrink: 0; padding: 10px 16px; font-size: 13px; font-weight: 500;
+  border: none; background: transparent; cursor: pointer; color: var(--text2);
+  border-bottom: 2px solid transparent; transition: color 0.15s, border-color 0.15s;
+  display: flex; align-items: center; gap: 6px; white-space: nowrap;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-btn.empty { opacity: 0.4; cursor: default; }
+
+.tab-badge {
+  font-size: 10px; font-weight: 600; padding: 2px 6px;
+  border-radius: 99px; background: var(--accent-bg); color: var(--accent);
+}
+.tab-btn.empty .tab-badge { background: var(--surface2); color: var(--text3); }
+
+.tab-panel { display: none; padding: 1.25rem; }
+.tab-panel.active { display: block; }
+
+.tab-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 1rem; flex-wrap: wrap; gap: 8px;
+}
+.tab-title { font-size: 15px; font-weight: 500; }
+.tab-count { font-size: 13px; color: var(--text2); }
+
+.dl-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 14px; font-size: 13px; font-weight: 500;
+  background: var(--accent); color: #fff; border: none;
+  border-radius: var(--radius); cursor: pointer; transition: opacity 0.15s;
+}
+.dl-btn:hover:not(:disabled) { opacity: 0.85; }
+.dl-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Preview table */
+.preview-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.preview-wrap table { width: 100%; font-size: 11px; border-collapse: collapse; }
+.preview-wrap th {
+  background: var(--surface2); padding: 6px 10px; text-align: left;
+  font-weight: 500; color: var(--text2); border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.preview-wrap td {
+  padding: 5px 10px; border-bottom: 1px solid var(--border);
+  white-space: nowrap; color: var(--text); max-width: 160px;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.preview-wrap tr:last-child td { border-bottom: none; }
+.preview-more { padding: 8px 10px; font-size: 11px; color: var(--text3); font-style: italic; }
+
+.empty-msg { padding: 2rem; text-align: center; color: var(--text3); font-size: 13px; }
+
+.result-section { display: none; }
+.result-section.visible { display: block; margin-top: 1rem; }
+
+footer {
+  margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border);
+  font-size: 12px; color: var(--text3);
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div class="app-label"><a href="./">← ツールポータルに戻る</a></div>
+    <h1>3媒体統合ツール</h1>
+    <p class="subtitle">DF・MD・マイナビの課金リストを統合し、重複判定・媒体別分類（7パターン）を行います</p>
+  </header>
+
+  <div class="card">
+    <div class="card-title">CSVをアップロード（1ファイルから実行可能）</div>
+    <div class="upload-grid">
+
+      <div class="upload-item" id="box-df">
+        <label>
+          <div class="upload-icon">📄</div>
+          <div class="upload-name">DF課金リスト</div>
+          <div class="upload-status" id="status-df">クリックして選択</div>
+          <input type="file" accept=".csv" onchange="handleFile('df', this)">
+        </label>
+      </div>
+
+      <div class="upload-item" id="box-md">
+        <label>
+          <div class="upload-icon">📄</div>
+          <div class="upload-name">MD課金リスト</div>
+          <div class="upload-status" id="status-md">クリックして選択</div>
+          <input type="file" accept=".csv" onchange="handleFile('md', this)">
+        </label>
+      </div>
+
+      <div class="upload-item" id="box-mynavi">
+        <label>
+          <div class="upload-icon">📋</div>
+          <div class="upload-name">マイナビ</div>
+          <div class="upload-status" id="status-mynavi">クリックして選択</div>
+          <input type="file" accept=".csv" onchange="handleFile('mynavi', this)">
+        </label>
+      </div>
+
+    </div>
+  </div>
+
+  <button class="run-btn" id="run-btn" onclick="runProcess()" disabled>統合を実行</button>
+
+  <div class="result-section" id="result-section">
+
+    <div class="stats-row">
+      <div class="stat"><div class="stat-label">DF</div><div class="stat-value" id="stat-df">—</div></div>
+      <div class="stat"><div class="stat-label">MD</div><div class="stat-value" id="stat-md">—</div></div>
+      <div class="stat"><div class="stat-label">マイナビ</div><div class="stat-value" id="stat-mv">—</div></div>
+      <div class="stat"><div class="stat-label">統合後（ユニーク）</div><div class="stat-value" id="stat-total">—</div></div>
+    </div>
+
+    <div class="log-card" id="log-box"></div>
+
+    <div class="tabs-wrap">
+      <div class="tab-nav" id="tab-nav"></div>
+      <div id="tab-panels"></div>
+    </div>
+
+  </div>
+
+  <footer>Crestix Inc. — 第一営業部 社内限定ツール ｜ <a href="./" style="color:inherit">ポータルに戻る</a></footer>
+
+</div>
+
+<script>
+/* =====================================================
+   定数
+===================================================== */
+const OUTPUT_HEADERS = [
+  'UUID','種別','名前','カナ','郵便番号','都道府県','住所１','住所２','住所カナ',
+  'Tel1','Tel2','Tel3','Tel4','FAX','URL','備考','旧社名','リードソース','BP検索',
+  '旧進捗','履歴','記事名','休診日','午前始','午前終','午後始','午後終','院長名','DF','診療日'
+];
+
+const OUTPUT_SHEETS = [
+  'DF_MD_マイナビ','DF_MD','DF_マイナビ','MD_マイナビ','DFのみ','MDのみ','マイナビのみ'
+];
+
+/* =====================================================
+   ファイル読み込み
+===================================================== */
+const files   = { df: null, md: null, mynavi: null };
+const parsed  = { df: [], md: [], mynavi: [] };
+let results   = {};
+
+function handleFile(key, input) {
+  const file = input.files[0];
+  if (!file) return;
+  files[key] = file;
+  document.getElementById('status-' + key).textContent = '読み込み中...';
+
+  // BOM判定 → Shift-JIS or UTF-8
+  const binReader = new FileReader();
+  binReader.onload = (e) => {
+    const arr = new Uint8Array(e.target.result);
+    const isUtf8Bom = arr[0] === 0xEF && arr[1] === 0xBB && arr[2] === 0xBF;
+    const encoding = isUtf8Bom ? 'UTF-8' : 'Shift-JIS';
+
+    const textReader = new FileReader();
+    textReader.onload = (e2) => {
+      let text = e2.target.result;
+      if (isUtf8Bom) text = text.replace(/^\uFEFF/, '');
+
+      const res = Papa.parse(text, { header: true, skipEmptyLines: true });
+
+      // SJISで読んで文字化けしていた場合はUTF-8で再試行
+      const firstHeader = Object.keys(res.data[0] || {})[0] || '';
+      const isMojibake = firstHeader.length > 0 && firstHeader.charCodeAt(0) > 60000;
+
+      if (!isUtf8Bom && isMojibake) {
+        const utf8Reader = new FileReader();
+        utf8Reader.onload = (e3) => {
+          const res2 = Papa.parse(e3.target.result.replace(/^\uFEFF/, ''), { header: true, skipEmptyLines: true });
+          parsed[key] = res2.data;
+          onParsed(key, file.name, res2.data.length);
+        };
+        utf8Reader.readAsText(file, 'UTF-8');
+        return;
+      }
+
+      parsed[key] = res.data;
+      onParsed(key, file.name, res.data.length);
+    };
+    textReader.readAsText(file, encoding);
+  };
+  binReader.readAsArrayBuffer(file.slice(0, 3));
+}
+
+function onParsed(key, filename, count) {
+  document.getElementById('status-' + key).textContent = filename + '（' + count + '件）';
+  document.getElementById('box-' + key).classList.add('loaded');
+  updateRunBtn();
+}
+
+function updateRunBtn() {
+  const hasAny = files.df || files.md || files.mynavi;
+  document.getElementById('run-btn').disabled = !hasAny;
+}
+
+/* =====================================================
+   正規化ユーティリティ
+===================================================== */
+function zenkakuToHankaku(s) {
+  return String(s || '').replace(/[！-～]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/　/g, ' ');
+}
+
+function buildPhoneKey(phone) {
+  const digits = zenkakuToHankaku(String(phone || '')).replace(/\D/g, '');
+  if (!digits) return '';
+  return digits.replace(/^0+/, '');
+}
+
+function buildAddressKey(pref, addr1, addr2) {
+  return [pref, addr1, addr2]
+    .map(v => zenkakuToHankaku(String(v || '')).replace(/[\s\u3000]/g, '').toLowerCase())
+    .join('');
+}
+
+function val(obj, ...keys) {
+  for (const k of keys) {
+    if (obj && obj[k] !== undefined) {
+      const v = String(obj[k]).trim();
+      if (v) return v;
+    }
+  }
+  return '';
+}
+
+function hasValue(v) { return String(v || '').trim() !== ''; }
+
+function normalizeDayList(v) {
+  return String(v || '').replace(/[\u3000\s]+/g, '').replace(/、/g, ',');
+}
+
+function normalizeTime(v) {
+  const s = String(v || '').trim();
+  if (!s) return '';
+  const m = s.match(/^(\d{1,2}):(\d{1,2})(?::\d+)?$/);
+  if (!m) return s;
+  return ('0' + Number(m[1])).slice(-2) + ':' + ('0' + Number(m[2])).slice(-2);
+}
+
+function splitAddress(fullAddress, row) {
+  const addr = String(fullAddress || '').replace(/[\r\n]+/g, ' ').replace(/[\u3000\s]+/g, ' ').trim();
+  const m = addr.match(/^(東京都|北海道|(?:京都|大阪)府|.{2,3}県)(.*)/);
+  if (m) { row['都道府県'] = m[1]; row['住所１'] = m[2].trim(); }
+  else   { row['都道府県'] = '';   row['住所１'] = addr; }
+  row['住所２'] = '';
+}
+
+/* =====================================================
+   行正規化（媒体ごと）
+===================================================== */
+function createTemplate() {
+  const r = {};
+  OUTPUT_HEADERS.forEach(h => r[h] = '');
+  return r;
+}
+
+function normalizeDfRow(src) {
+  const row = createTemplate();
+  row['名前']   = val(src, '医院名');
+  row['Tel1']   = val(src, '電話番号');
+  row['院長名'] = val(src, '医師名');
+  row['診療日'] = normalizeDayList(val(src, '営業曜日'));
+  row['休診日'] = normalizeDayList(val(src, '休業日'));
+  row['午前始'] = normalizeTime(val(src, '午前開始時間'));
+  row['午前終'] = normalizeTime(val(src, '午前終了時間'));
+  row['午後始'] = normalizeTime(val(src, '午後開始時間'));
+  row['午後終'] = normalizeTime(val(src, '午後終了時間'));
+  row['URL']    = val(src, 'クリニックURL');
+  row['DF']     = '○';
+  splitAddress(val(src, '住所'), row);
+  return row;
+}
+
+function normalizeMdRow(src) {
+  const row = createTemplate();
+  row['名前']   = val(src, '医院名');
+  row['Tel1']   = val(src, '電話番号');
+  row['記事名'] = val(src, '記事タイトル');
+  row['診療日'] = normalizeDayList(val(src, '営業曜日'));
+  row['休診日'] = normalizeDayList(val(src, '休診日'));
+  row['午前始'] = normalizeTime(val(src, '午前診療開始時間'));
+  row['午前終'] = normalizeTime(val(src, '午前診療終了時間'));
+  row['午後始'] = normalizeTime(val(src, '午後診療開始時間'));
+  row['午後終'] = normalizeTime(val(src, '午後診療終了時間'));
+  row['URL']    = val(src, 'ホームページ');
+  splitAddress(val(src, '住所'), row);
+  return row;
+}
+
+function normalizeMynaviRow(src) {
+  const row = createTemplate();
+  OUTPUT_HEADERS.forEach(h => { row[h] = val(src, h); });
+  row['休診日'] = normalizeDayList(row['休診日']);
+  row['診療日'] = normalizeDayList(row['診療日']);
+  row['午前始'] = normalizeTime(row['午前始']);
+  row['午前終'] = normalizeTime(row['午前終']);
+  row['午後始'] = normalizeTime(row['午後始']);
+  row['午後終'] = normalizeTime(row['午後終']);
+  return row;
+}
+
+/* =====================================================
+   統合ロジック（GASと同等）
+===================================================== */
+function mergeAllSources(dfRows, mdRows, mynaviRows) {
+  const clusters   = [];
+  const phoneMap   = new Map();
+  const addressMap = new Map();
+
+  // 優先順位が低い順に投入（MD → DF → マイナビ）
+  ingestRows(mdRows,     'MD',     clusters, phoneMap, addressMap);
+  ingestRows(dfRows,     'DF',     clusters, phoneMap, addressMap);
+  ingestRows(mynaviRows, 'マイナビ', clusters, phoneMap, addressMap);
+
+  return clusters.map(finalizeCluster);
+}
+
+function ingestRows(rows, sourceName, clusters, phoneMap, addressMap) {
+  rows.forEach(src => {
+    const normalized = sourceName === 'DF'     ? normalizeDfRow(src)
+                     : sourceName === 'MD'     ? normalizeMdRow(src)
+                     : normalizeMynaviRow(src);
+
+    const phoneKey   = buildPhoneKey(normalized['Tel1']);
+    const addressKey = buildAddressKey(normalized['都道府県'], normalized['住所１'], normalized['住所２']);
+
+    let cluster = null;
+
+    if (phoneKey && phoneMap.has(phoneKey)) {
+      cluster = phoneMap.get(phoneKey);
+    }
+    if (!cluster && !phoneKey && addressKey && addressMap.has(addressKey)) {
+      cluster = addressMap.get(addressKey);
+    }
+
+    if (!cluster) {
+      cluster = createEmptyCluster();
+      clusters.push(cluster);
+    }
+
+    mergeIntoCluster(cluster, normalized, sourceName);
+
+    const mergedPhone = buildPhoneKey(cluster.row['Tel1']);
+    if (mergedPhone) phoneMap.set(mergedPhone, cluster);
+
+    const mergedAddr = buildAddressKey(cluster.row['都道府県'], cluster.row['住所１'], cluster.row['住所２']);
+    if (mergedAddr) addressMap.set(mergedAddr, cluster);
+  });
+}
+
+function createEmptyCluster() {
+  const row = {};
+  OUTPUT_HEADERS.forEach(h => row[h] = '');
+  return { row, sources: new Set(), sourceRows: { MD: null, DF: null, 'マイナビ': null } };
+}
+
+function mergeIntoCluster(cluster, incomingRow, sourceName) {
+  cluster.sources.add(sourceName);
+  cluster.sourceRows[sourceName] = incomingRow;
+
+  const priority = ['MD', 'DF', 'マイナビ'];
+  const merged = {};
+
+  OUTPUT_HEADERS.forEach(header => {
+    merged[header] = '';
+    for (let i = priority.length - 1; i >= 0; i--) {
+      const src = cluster.sourceRows[priority[i]];
+      if (src && hasValue(src[header])) { merged[header] = src[header]; break; }
+    }
+  });
+
+  cluster.row = merged;
+  cluster.row['DF'] = cluster.sources.has('DF') ? '○' : (hasValue(cluster.row['DF']) ? cluster.row['DF'] : '');
+}
+
+function finalizeCluster(cluster) {
+  return {
+    row: OUTPUT_HEADERS.map(h => cluster.row[h] || ''),
+    sourceSet: new Set(Array.from(cluster.sources))
+  };
+}
+
+function categorize(merged) {
+  const r = {};
+  OUTPUT_SHEETS.forEach(s => r[s] = []);
+
+  merged.forEach(item => {
+    const s = item.sourceSet;
+    if      (s.has('DF') && s.has('MD') && s.has('マイナビ')) r['DF_MD_マイナビ'].push(item.row);
+    else if (s.has('DF') && s.has('MD'))                       r['DF_MD'].push(item.row);
+    else if (s.has('DF') && s.has('マイナビ'))                  r['DF_マイナビ'].push(item.row);
+    else if (s.has('MD') && s.has('マイナビ'))                  r['MD_マイナビ'].push(item.row);
+    else if (s.has('DF'))                                       r['DFのみ'].push(item.row);
+    else if (s.has('MD'))                                       r['MDのみ'].push(item.row);
+    else if (s.has('マイナビ'))                                  r['マイナビのみ'].push(item.row);
+  });
+
+  return r;
+}
+
+/* =====================================================
+   実行
+===================================================== */
+function runProcess() {
+  const btn = document.getElementById('run-btn');
+  btn.textContent = '処理中...';
+  btn.disabled = true;
+
+  setTimeout(() => {
+    try { _run(); }
+    catch (e) { alert('エラー: ' + e.message); }
+    btn.textContent = '統合を実行';
+    btn.disabled = false;
+  }, 60);
+}
+
+function _run() {
+  const dfRows     = parsed.df.map(normalizeDfRow);     // 正規化
+  const mdRows     = parsed.md.map(normalizeMdRow);
+  const mynaviRows = parsed.mynavi.map(normalizeMynaviRow);
+
+  // 統合
+  const merged = mergeAllSources(
+    parsed.df,
+    parsed.md,
+    parsed.mynavi
+  );
+
+  results = categorize(merged);
+
+  // Stats
+  document.getElementById('stat-df').textContent    = parsed.df.length     || '—';
+  document.getElementById('stat-md').textContent    = parsed.md.length     || '—';
+  document.getElementById('stat-mv').textContent    = parsed.mynavi.length || '—';
+  document.getElementById('stat-total').textContent = merged.length;
+
+  // Log
+  const logs = [];
+  logs.push({ text: `DF: ${parsed.df.length}件 / MD: ${parsed.md.length}件 / マイナビ: ${parsed.mynavi.length}件`, cls: 'info' });
+  logs.push({ text: `統合後ユニーク件数: ${merged.length}件`, cls: 'ok' });
+  OUTPUT_SHEETS.forEach(s => {
+    logs.push({ text: `${s}: ${results[s].length}件`, cls: '' });
+  });
+  renderLog(logs);
+
+  // Tabs
+  renderTabs();
+
+  document.getElementById('result-section').classList.add('visible');
+  document.getElementById('result-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/* =====================================================
+   ログ描画
+===================================================== */
+function renderLog(logs) {
+  document.getElementById('log-box').innerHTML = logs
+    .map(l => `<div class="log-line ${l.cls}">${l.text}</div>`)
+    .join('');
+}
+
+/* =====================================================
+   タブ描画
+===================================================== */
+function renderTabs() {
+  const nav    = document.getElementById('tab-nav');
+  const panels = document.getElementById('tab-panels');
+  nav.innerHTML = '';
+  panels.innerHTML = '';
+
+  OUTPUT_SHEETS.forEach((sheetName, i) => {
+    const rows  = results[sheetName] || [];
+    const empty = rows.length === 0;
+
+    // Tab button
+    const btn = document.createElement('button');
+    btn.className = 'tab-btn' + (i === 0 ? ' active' : '') + (empty ? ' empty' : '');
+    btn.innerHTML = `${sheetName} <span class="tab-badge">${rows.length}</span>`;
+    if (!empty) btn.onclick = () => switchTab(sheetName);
+    nav.appendChild(btn);
+
+    // Panel
+    const panel = document.createElement('div');
+    panel.className = 'tab-panel' + (i === 0 ? ' active' : '');
+    panel.id = 'panel-' + sheetName;
+
+    if (empty) {
+      panel.innerHTML = '<div class="empty-msg">0件（該当なし）</div>';
+    } else {
+      panel.innerHTML = `
+        <div class="tab-header">
+          <div>
+            <div class="tab-title">${sheetName}</div>
+            <div class="tab-count">${rows.length}件</div>
+          </div>
+          <button class="dl-btn" onclick="downloadCSV('${sheetName}')">⬇ CSVダウンロード</button>
+        </div>
+        <div class="preview-wrap">${buildPreviewTable(rows, 5)}</div>
+      `;
+    }
+    panels.appendChild(panel);
+  });
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach((b, i) => {
+    b.classList.toggle('active', OUTPUT_SHEETS[i] === name);
+  });
+  document.querySelectorAll('.tab-panel').forEach(p => {
+    p.classList.toggle('active', p.id === 'panel-' + name);
+  });
+}
+
+/* =====================================================
+   プレビューテーブル
+===================================================== */
+function buildPreviewTable(rows, limit) {
+  // 表示する列：主要列に絞る
+  const PREVIEW_COLS = ['名前','Tel1','都道府県','住所１','URL','記事名','院長名','DF'];
+  const sample = rows.slice(0, limit);
+
+  let html = '<table><thead><tr>';
+  PREVIEW_COLS.forEach(c => { html += `<th>${c}</th>`; });
+  html += '</tr></thead><tbody>';
+
+  sample.forEach(row => {
+    html += '<tr>';
+    PREVIEW_COLS.forEach((c, ci) => {
+      const idx = OUTPUT_HEADERS.indexOf(c);
+      const v = idx >= 0 ? (row[idx] || '') : '';
+      html += `<td title="${esc(v)}">${esc(v)}</td>`;
+    });
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+  if (rows.length > limit) {
+    html += `<div class="preview-more">…他 ${rows.length - limit} 件（CSVダウンロードで全件確認できます）</div>`;
+  }
+  return html;
+}
+
+function esc(v) {
+  return String(v || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* =====================================================
+   CSVダウンロード
+===================================================== */
+function downloadCSV(sheetName) {
+  const rows = results[sheetName];
+  if (!rows || !rows.length) return;
+
+  const data = [OUTPUT_HEADERS].concat(rows);
+  const csv  = Papa.unparse(data, { header: false });
+  const bom  = '\uFEFF';
+  const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = sheetName + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>
