@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3媒体統合ツール</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #f5f4f0;
+  --surface: #ffffff;
+  --surface2: #f0efe9;
+  --border: #e0dfd8;
+  --border2: #c8c7bf;
+  --text: #1a1918;
+  --text2: #6b6a65;
+  --text3: #9b9a94;
+  --accent: #1a5276;
+  --accent-bg: #eaf0f6;
+  --accent-light: #d0e4f0;
+  --success: #1a6b3c;
+  --success-bg: #eaf6ef;
+  --success-border: #b7dfc8;
+  --radius: 8px;
+  --radius-lg: 12px;
+}
+
+body {
+  font-family: 'Helvetica Neue', 'Hiragino Sans', 'Yu Gothic', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 4rem;
+}
+
+header { margin-bottom: 2.5rem; }
+
+.app-label {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 8px;
+}
+
+h1 {
+  font-size: 24px;
+  font-weight: 500;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  margin-bottom: 6px;
+}
+
+.subtitle { font-size: 14px; color: var(--text2); }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.card-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 1rem;
+}
+
+.upload-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+}
+
+@media (max-width: 640px) {
+  .upload-grid { grid-template-columns: 1fr; }
+}
+
+.upload-item {
+  border: 1px dashed var(--border2);
+  border-radius: var(--radius);
+  background: var(--surface2);
+  transition: border-color 0.15s, background 0.15s;
+  cursor: pointer;
+}
+
+.upload-item:hover { border-color: var(--accent); }
+
+.upload-item.loaded {
+  border-style: solid;
+  border-color: var(--success);
+  background: var(--success-bg);
+}
+
+.upload-item label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  cursor: pointer;
+}
+
+.upload-item input[type=file] { display: none; }
+
+.upload-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  background: var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 16px;
+}
+
+.upload-item.loaded .upload-icon { background: var(--success-border); }
+
+.upload-meta { flex: 1; min-width: 0; }
+
+.upload-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.upload-status {
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.upload-item.loaded .upload-status { color: var(--success); }
+
+.run-btn {
+  width: 100%;
+  padding: 14px;
+  font-size: 15px;
+  font-weight: 500;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: opacity 0.15s;
+  margin-top: 0.5rem;
+  letter-spacing: 0.01em;
+}
+
+.run-btn:hover:not(:disabled) { opacity: 0.88; }
+.run-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.result-section { display: none; margin-top: 1.5rem; }
+.result-section.visible { display: block; }
+
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 1.5rem;
+}
+
+@media (max-width: 640px) {
+  .stats-row { grid-template-columns: repeat(2, 1fr); }
+}
+
+.stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+}
+
+.stat-label { font-size: 11px; color: var(--text3); margin-bottom: 4px; }
+.stat-value { font-size: 22px; font-weight: 500; color: var(--text); }
+.stat.accent .stat-value { color: var(--accent); }
+
+.tabs-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.tab-bar {
+  display: flex;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+  scrollbar-width: none;
+}
+
+.tab-bar::-webkit-scrollbar { display: none; }
+
+.tab-btn {
+  flex-shrink: 0;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text2);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.tab-btn:hover:not(:disabled) { color: var(--accent); }
+
+.tab-btn.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  background: var(--surface);
+}
+
+.tab-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.tab-count {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 99px;
+  background: var(--border);
+  color: var(--text3);
+}
+
+.tab-btn.active .tab-count {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.tab-panels { padding: 1.25rem; }
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+.dl-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: var(--radius);
+  cursor: pointer;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  transition: opacity 0.15s;
+  margin-bottom: 12px;
+}
+
+.dl-btn:hover:not(:disabled) { opacity: 0.85; }
+.dl-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.preview-wrap {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: auto;
+  background: var(--surface);
+  max-width: 100%;
+}
+
+.preview-wrap table {
+  min-width: 100%;
+  font-size: 11px;
+  border-collapse: collapse;
+  white-space: nowrap;
+}
+
+.preview-wrap th {
+  background: var(--surface2);
+  padding: 6px 10px;
+  text-align: left;
+  font-weight: 500;
+  color: var(--text2);
+  border-bottom: 1px solid var(--border);
+}
+
+.preview-wrap td {
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.preview-wrap tr:last-child td { border-bottom: none; }
+
+.log-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-top: 1rem;
+  font-size: 12px;
+  line-height: 2;
+  color: var(--text2);
+}
+
+.log-line.ok   { color: var(--success); font-weight: 500; }
+.log-line.info { color: var(--accent);  font-weight: 500; }
+.log-line.sep  { color: var(--border2); }
+
+footer {
+  margin-top: 3rem;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text3);
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div class="app-label"><a href="../" style="color:inherit;text-decoration:none;">← ツールポータルに戻る</a></div>
+    <h1>3媒体統合ツール</h1>
+    <p class="subtitle">DF・MD・マイナビの課金リストを統合し、重複判定・媒体別分類（7パターン）を行います</p>
+  </header>
+
+  <div class="card">
+    <div class="card-title">CSVファイルをアップロード（各任意・1ファイル以上）</div>
+    <div class="upload-grid">
+
+      <div class="upload-item" id="box-df">
+        <label>
+          <div class="upload-icon">📄</div>
+          <div class="upload-meta">
+            <div class="upload-name">DF課金リスト</div>
+            <div class="upload-status" id="status-df">クリックして選択</div>
+          </div>
+          <input type="file" accept=".csv" onchange="handleFile('df', this)">
+        </label>
+      </div>
+
+      <div class="upload-item" id="box-md">
+        <label>
+          <div class="upload-icon">📄</div>
+          <div class="upload-meta">
+            <div class="upload-name">MD課金リスト</div>
+            <div class="upload-status" id="status-md">クリックして選択</div>
+          </div>
+          <input type="file" accept=".csv" onchange="handleFile('md', this)">
+        </label>
+      </div>
+
+      <div class="upload-item" id="box-mynavi">
+        <label>
+          <div class="upload-icon">📋</div>
+          <div class="upload-meta">
+            <div class="upload-name">マイナビ</div>
+            <div class="upload-status" id="status-mynavi">クリックして選択</div>
+          </div>
+          <input type="file" accept=".csv" onchange="handleFile('mynavi', this)">
+        </label>
+      </div>
+
+    </div>
+  </div>
+
+  <button class="run-btn" id="run-btn" onclick="runProcess()" disabled>
+    統合を実行
+  </button>
+
+  <div class="result-section" id="result-section">
+
+    <div class="stats-row">
+      <div class="stat">
+        <div class="stat-label">DF</div>
+        <div class="stat-value" id="stat-df">—</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">MD</div>
+        <div class="stat-value" id="stat-md">—</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">マイナビ</div>
+        <div class="stat-value" id="stat-mynavi">—</div>
+      </div>
+      <div class="stat accent">
+        <div class="stat-label">統合後ユニーク</div>
+        <div class="stat-value" id="stat-total">—</div>
+      </div>
+    </div>
+
+    <div class="tabs-card">
+      <div class="tab-bar" id="tab-bar"></div>
+      <div class="tab-panels" id="tab-panels"></div>
+    </div>
+
+    <div class="log-card" id="log-box"></div>
+
+  </div>
+
+  <footer>Crestix Inc. — 第一営業部 社内限定ツール ｜ <a href="../" style="color:inherit">ポータルに戻る</a></footer>
+
+</div>
+<script>
+const files  = { df: null, md: null, mynavi: null };
+const parsed = { df: [],   md: [],   mynavi: []   };
+
+const OUTPUT_COLS = [
+  'UUID','種別','名前','カナ','郵便番号','都道府県','住所１','住所２','住所カナ',
+  'Tel1','Tel2','Tel3','Tel4','FAX','URL','備考','旧社名','リードソース','BP検索',
+  '旧進捗','履歴','記事名','休診日','午前始','午前終','午後始','午後終','院長名','DF','診療日'
+];
+
+const PREVIEW_COLS = ['名前','Tel1','都道府県','住所１','URL','院長名','DF','記事名'];
+
+const GROUPS = [
+  { key: 'df_md_mynavi', label: 'DF_MD_マイナビ', filename: 'DF_MD_マイナビ.csv' },
+  { key: 'df_md',        label: 'DF_MD',          filename: 'DF_MD.csv'          },
+  { key: 'df_mynavi',    label: 'DF_マイナビ',     filename: 'DF_マイナビ.csv'     },
+  { key: 'md_mynavi',    label: 'MD_マイナビ',     filename: 'MD_マイナビ.csv'     },
+  { key: 'df_only',      label: 'DFのみ',         filename: 'DFのみ.csv'          },
+  { key: 'md_only',      label: 'MDのみ',         filename: 'MDのみ.csv'          },
+  { key: 'mynavi_only',  label: 'マイナビのみ',    filename: 'マイナビのみ.csv'     },
+];
+
+let results = {};
+
+/* ---- ファイル読み込み ---- */
+
+function handleFile(key, input) {
+  const file = input.files[0];
+  if (!file) return;
+  files[key] = file;
+  document.getElementById('status-' + key).textContent = '読み込み中...';
+
+  const sniffer = new FileReader();
+  sniffer.onload = (e) => {
+    const b = new Uint8Array(e.target.result);
+    const hasBom = b[0] === 0xEF && b[1] === 0xBB && b[2] === 0xBF;
+    parseWithEncoding(file, key, hasBom ? 'UTF-8' : 'Shift-JIS');
+  };
+  sniffer.readAsArrayBuffer(file.slice(0, 3));
+}
+
+function parseWithEncoding(file, key, encoding) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const text = e.target.result;
+    const res  = Papa.parse(text, { header: true, skipEmptyLines: true });
+    const firstHeader = Object.keys(res.data[0] || {})[0] || '';
+    if (encoding === 'Shift-JIS' && firstHeader.includes('�')) {
+      parseWithEncoding(file, key, 'UTF-8');
+      return;
+    }
+    parsed[key] = res.data;
+    onParsed(key, file.name, res.data.length);
+  };
+  reader.onerror = () => {
+    document.getElementById('status-' + key).textContent = '読み込みエラー';
+  };
+  reader.readAsText(file, encoding);
+}
+
+function onParsed(key, filename, count) {
+  document.getElementById('status-' + key).textContent = filename + ' (' + count + '件)';
+  document.getElementById('box-' + key).classList.add('loaded');
+  document.getElementById('run-btn').disabled = !(files.df || files.md || files.mynavi);
+}
+
+/* ---- 正規化 ---- */
+
+const PREFS = [
+  '北海道','青森県','岩手県','宮城県','秋田県','山形県','福島県','茨城県','栃木県','群馬県',
+  '埼玉県','千葉県','東京都','神奈川県','新潟県','富山県','石川県','福井県','山梨県','長野県',
+  '岐阜県','静岡県','愛知県','三重県','滋賀県','京都府','大阪府','兵庫県','奈良県','和歌山県',
+  '鳥取県','島根県','岡山県','広島県','山口県','徳島県','香川県','愛媛県','高知県','福岡県',
+  '佐賀県','長崎県','熊本県','大分県','宮崎県','鹿児島県','沖縄県'
+];
+
+function splitAddress(fullAddr) {
+  const addr = String(fullAddr || '').trim();
+  for (const pref of PREFS) {
+    if (addr.startsWith(pref)) return { pref, rest: addr.slice(pref.length) };
+  }
+  return { pref: '', rest: addr };
+}
+
+function zenkakuToHankaku(s) {
+  return String(s || '').replace(/[！-～]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/　/g, ' ');
+}
+
+function buildPhoneKey(phone) {
+  const digits = zenkakuToHankaku(String(phone || '')).replace(/\D/g, '');
+  if (!digits) return '';
+  return digits.replace(/^0+/, '');
+}
+
+function buildAddressKey(pref, a1, a2) {
+  return [pref, a1, a2]
+    .map(v => zenkakuToHankaku(String(v || '')).replace(/[\s　]/g, '').toLowerCase())
+    .join('');
+}
+
+function val(obj, ...keys) {
+  for (const k of keys) {
+    const v = obj && obj[k] !== undefined ? String(obj[k]).trim() : '';
+    if (v) return v;
+  }
+  return '';
+}
+
+function normalizeRow(row, source) {
+  if (source === 'df') {
+    const addr = splitAddress(val(row, '住所'));
+    return {
+      UUID: '', 種別: '',
+      名前: val(row, '医院名'),
+      カナ: '', 郵便番号: '',
+      都道府県: addr.pref, 住所１: addr.rest, 住所２: '', 住所カナ: '',
+      Tel1: val(row, '電話番号'),
+      Tel2: '', Tel3: '', Tel4: '', FAX: '',
+      URL: val(row, 'クリニックURL'),
+      備考: '', 旧社名: '', リードソース: '', BP検索: '', 旧進捗: '', 履歴: '',
+      記事名: '',
+      休診日: val(row, '休業日'),
+      午前始: val(row, '午前開始時間', '午前診療開始時間'),
+      午前終: val(row, '午前終了時間', '午前診療終了時間'),
+      午後始: val(row, '午後開始時間', '午後診療開始時間'),
+      午後終: val(row, '午後終了時間', '午後診療終了時間'),
+      院長名: val(row, '医師名'),
+      DF: '○',
+      診療日: val(row, '営業曜日'),
+      _source: 'df'
+    };
+  }
+
+  if (source === 'md') {
+    const addr = splitAddress(val(row, '住所'));
+    return {
+      UUID: '', 種別: '',
+      名前: val(row, '医院名'),
+      カナ: '', 郵便番号: '',
+      都道府県: addr.pref, 住所１: addr.rest, 住所２: '', 住所カナ: '',
+      Tel1: val(row, '電話番号'),
+      Tel2: '', Tel3: '', Tel4: '', FAX: '',
+      URL: val(row, 'ホームページ'),
+      備考: '', 旧社名: '', リードソース: '', BP検索: '', 旧進捗: '', 履歴: '',
+      記事名: val(row, '記事タイトル'),
+      休診日: val(row, '休診日'),
+      午前始: val(row, '午前診療開始時間', '午前開始時間'),
+      午前終: val(row, '午前診療終了時間', '午前終了時間'),
+      午後始: val(row, '午後診療開始時間', '午後開始時間'),
+      午後終: val(row, '午後診療終了時間', '午後終了時間'),
+      院長名: '',
+      DF: '',
+      診療日: val(row, '営業曜日'),
+      _source: 'md'
+    };
+  }
+
+  // mynavi
+  return {
+    UUID:       val(row, 'UUID'),
+    種別:       val(row, '種別'),
+    名前:       val(row, '名前'),
+    カナ:       val(row, 'カナ'),
+    郵便番号:   val(row, '郵便番号'),
+    都道府県:   val(row, '都道府県'),
+    住所１:     val(row, '住所１'),
+    住所２:     val(row, '住所２'),
+    住所カナ:   val(row, '住所カナ'),
+    Tel1:       val(row, 'Tel1'),
+    Tel2:       val(row, 'Tel2'),
+    Tel3:       val(row, 'Tel3'),
+    Tel4:       val(row, 'Tel4'),
+    FAX:        val(row, 'FAX'),
+    URL:        val(row, 'URL'),
+    備考:       val(row, '備考'),
+    旧社名:     val(row, '旧社名'),
+    リードソース: val(row, 'リードソース'),
+    BP検索:     val(row, 'BP検索'),
+    旧進捗:     val(row, '旧進捗'),
+    履歴:       val(row, '履歴'),
+    記事名:     val(row, '記事名'),
+    休診日:     val(row, '休診日'),
+    午前始:     val(row, '午前始'),
+    午前終:     val(row, '午前終'),
+    午後始:     val(row, '午後始'),
+    午後終:     val(row, '午後終'),
+    院長名:     val(row, '院長名'),
+    DF:         val(row, 'DF'),
+    診療日:     val(row, '診療日'),
+    _source: 'mynavi'
+  };
+}
+
+/* ---- Union-Find クラスタリング ---- */
+
+function buildClusters(allRows) {
+  const n = allRows.length;
+  const parent = Array.from({ length: n }, (_, i) => i);
+  const rnk = new Array(n).fill(0);
+
+  function find(x) {
+    while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; }
+    return x;
+  }
+
+  function union(x, y) {
+    const px = find(x), py = find(y);
+    if (px === py) return;
+    if (rnk[px] < rnk[py]) parent[px] = py;
+    else if (rnk[px] > rnk[py]) parent[py] = px;
+    else { parent[py] = px; rnk[px]++; }
+  }
+
+  const phoneMap = new Map();
+  const addrMap  = new Map();
+
+  allRows.forEach((row, i) => {
+    const pk = buildPhoneKey(row.Tel1);
+    if (pk) {
+      if (phoneMap.has(pk)) union(i, phoneMap.get(pk));
+      else phoneMap.set(pk, i);
+    } else {
+      const ak = buildAddressKey(row.都道府県, row.住所１, row.住所２);
+      if (ak) {
+        if (addrMap.has(ak)) union(i, addrMap.get(ak));
+        else addrMap.set(ak, i);
+      }
+    }
+  });
+
+  const groups = new Map();
+  allRows.forEach((row, i) => {
+    const root = find(i);
+    if (!groups.has(root)) groups.set(root, []);
+    groups.get(root).push(row);
+  });
+
+  return [...groups.values()];
+}
+
+/* ---- マージ（マイナビ > DF > MD）---- */
+
+function mergeCluster(rows) {
+  const priority = { md: 0, df: 1, mynavi: 2 };
+  const sorted   = [...rows].sort((a, b) => priority[a._source] - priority[b._source]);
+  const sources  = new Set(rows.map(r => r._source));
+  const merged   = {};
+
+  for (const row of sorted) {
+    for (const col of OUTPUT_COLS) {
+      if (col === 'DF') continue;
+      const v = row[col];
+      if (v !== undefined && String(v).trim()) merged[col] = v;
+    }
+  }
+
+  merged['DF'] = sources.has('df') ? '○' : (merged['DF'] || '');
+
+  for (const col of OUTPUT_COLS) {
+    if (!(col in merged)) merged[col] = '';
+  }
+
+  return { merged, sources };
+}
+
+function classifyCluster(sources) {
+  const df = sources.has('df'), md = sources.has('md'), mv = sources.has('mynavi');
+  if (df && md && mv) return 'df_md_mynavi';
+  if (df && md)       return 'df_md';
+  if (df && mv)       return 'df_mynavi';
+  if (md && mv)       return 'md_mynavi';
+  if (df)             return 'df_only';
+  if (md)             return 'md_only';
+  return 'mynavi_only';
+}
+
+/* ---- メイン処理 ---- */
+
+function runProcess() {
+  const btn = document.getElementById('run-btn');
+  btn.textContent = '処理中...';
+  btn.disabled = true;
+  setTimeout(() => {
+    try { _run(); }
+    catch (e) { alert('エラー: ' + e.message); console.error(e); }
+    btn.textContent = '統合を実行';
+    btn.disabled = false;
+  }, 50);
+}
+
+function _run() {
+  const logs = [];
+
+  const dfNorm     = parsed.df.map(r => normalizeRow(r, 'df'));
+  const mdNorm     = parsed.md.map(r => normalizeRow(r, 'md'));
+  const mynaviNorm = parsed.mynavi.map(r => normalizeRow(r, 'mynavi'));
+
+  document.getElementById('stat-df').textContent     = dfNorm.length     || '—';
+  document.getElementById('stat-md').textContent     = mdNorm.length     || '—';
+  document.getElementById('stat-mynavi').textContent = mynaviNorm.length || '—';
+
+  logs.push('--- 入力 ---');
+  if (dfNorm.length)     logs.push('DF: '       + dfNorm.length     + '件');
+  if (mdNorm.length)     logs.push('MD: '       + mdNorm.length     + '件');
+  if (mynaviNorm.length) logs.push('マイナビ: ' + mynaviNorm.length + '件');
+
+  const allRows = [...dfNorm, ...mdNorm, ...mynaviNorm];
+  if (!allRows.length) { alert('ファイルが読み込まれていません。'); return; }
+
+  const clusters = buildClusters(allRows);
+  document.getElementById('stat-total').textContent = clusters.length;
+
+  for (const g of GROUPS) results[g.key] = [];
+
+  clusters.forEach(clusterRows => {
+    const { merged, sources } = mergeCluster(clusterRows);
+    results[classifyCluster(sources)].push(merged);
+  });
+
+  logs.push('---');
+  logs.push('統合後ユニーク: ' + clusters.length + '件');
+  logs.push('--- 分類結果 ---');
+  for (const g of GROUPS) {
+    if (results[g.key].length) logs.push(g.label + ': ' + results[g.key].length + '件');
+  }
+
+  renderTabs();
+  renderLog(logs);
+
+  const section = document.getElementById('result-section');
+  section.classList.add('visible');
+  section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/* ---- UI レンダリング ---- */
+
+function renderTabs() {
+  const tabBar = document.getElementById('tab-bar');
+  const panels = document.getElementById('tab-panels');
+  tabBar.innerHTML = '';
+  panels.innerHTML = '';
+
+  let firstActive = null;
+
+  GROUPS.forEach(g => {
+    const count = (results[g.key] || []).length;
+
+    const btn = document.createElement('button');
+    btn.className = 'tab-btn';
+    btn.disabled  = count === 0;
+    btn.id        = 'tab-btn-' + g.key;
+    btn.onclick   = () => switchTab(g.key);
+    btn.innerHTML = esc(g.label) + ' <span class="tab-count">' + count + '</span>';
+    tabBar.appendChild(btn);
+
+    const panel = document.createElement('div');
+    panel.className = 'tab-panel';
+    panel.id        = 'panel-' + g.key;
+    panel.innerHTML = buildPanelHTML(g, results[g.key] || []);
+    panels.appendChild(panel);
+
+    if (!firstActive && count > 0) firstActive = g.key;
+  });
+
+  if (firstActive) switchTab(firstActive);
+}
+
+function switchTab(key) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  const btn   = document.getElementById('tab-btn-' + key);
+  const panel = document.getElementById('panel-' + key);
+  if (btn)   btn.classList.add('active');
+  if (panel) panel.classList.add('active');
+}
+
+function buildPanelHTML(g, rows) {
+  const disabled = rows.length === 0 ? ' disabled' : '';
+  let html = '<button class="dl-btn" onclick="downloadCSV(\'' + g.key + '\')"' + disabled + '>';
+  html += '⬇ ダウンロード（' + esc(g.filename) + '）</button>';
+  html += buildPreviewHTML(rows);
+  return html;
+}
+
+function buildPreviewHTML(rows) {
+  if (!rows.length) {
+    return '<div style="padding:10px 12px;font-size:12px;color:#9b9a94">0件</div>';
+  }
+  const cols   = PREVIEW_COLS;
+  const sample = rows.slice(0, 5);
+  let html = '<div class="preview-wrap"><table><thead><tr>';
+  cols.forEach(c => { html += '<th>' + esc(c) + '</th>'; });
+  html += '</tr></thead><tbody>';
+  sample.forEach(r => {
+    html += '<tr>';
+    cols.forEach(c => { html += '<td title="' + esc(r[c]) + '">' + esc(r[c]) + '</td>'; });
+    html += '</tr>';
+  });
+  if (rows.length > 5) {
+    html += '<tr><td colspan="' + cols.length + '" style="padding:6px 10px;color:#9b9a94;font-style:italic">…他' + (rows.length - 5) + '件</td></tr>';
+  }
+  html += '</tbody></table></div>';
+  return html;
+}
+
+function renderLog(lines) {
+  document.getElementById('log-box').innerHTML = lines.map(l => {
+    let cls = 'ok';
+    if (l.startsWith('---')) cls = 'sep';
+    else if (l.startsWith('統合後')) cls = 'info';
+    return '<div class="log-line ' + cls + '">' + esc(l) + '</div>';
+  }).join('');
+}
+
+function esc(v) {
+  return String(v || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ---- CSV ダウンロード ---- */
+
+function downloadCSV(key) {
+  const g    = GROUPS.find(x => x.key === key);
+  const rows = results[key] || [];
+  if (!rows.length) return;
+
+  const output = rows.map(r => {
+    const obj = {};
+    OUTPUT_COLS.forEach(c => { obj[c] = r[c] || ''; });
+    return obj;
+  });
+
+  const csv  = Papa.unparse(output, { header: true, columns: OUTPUT_COLS });
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = g.filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>
