@@ -372,6 +372,18 @@ function val(obj, ...keys) {
 
 function hasValue(v) { return String(v || '').trim() !== ''; }
 
+function pickByPriority(sourceRows, header) {
+  const priority = header === '院長名'
+    ? ['DF', 'DF_MD', 'マイナビ', 'MD']
+    : ['マイナビ', 'DF', 'MD', 'DF_MD'];
+
+  for (const sourceName of priority) {
+    const src = sourceRows[sourceName];
+    if (src && hasValue(src[header])) return src[header];
+  }
+  return '';
+}
+
 function normalizeDayList(v) {
   return String(v || '').replace(/[\u3000\s]+/g, '').replace(/、/g, ',');
 }
@@ -403,15 +415,15 @@ function createTemplate() {
 
 function normalizeDfRow(src) {
   const row = createTemplate();
-  row['名前']   = val(src, '医院名');
-  row['Tel1']   = val(src, '電話番号');
-  row['院長名'] = val(src, '医師名');
-  row['診療日'] = normalizeDayList(val(src, '営業曜日'));
-  row['休診日'] = normalizeDayList(val(src, '休業日'));
-  row['午前始'] = normalizeTime(val(src, '午前開始時間'));
-  row['午前終'] = normalizeTime(val(src, '午前終了時間'));
-  row['午後始'] = normalizeTime(val(src, '午後開始時間'));
-  row['午後終'] = normalizeTime(val(src, '午後終了時間'));
+  row['名前']   = val(src, '医院名', '名前');
+  row['Tel1']   = val(src, '電話番号', 'Tel1', 'tel1');
+  row['院長名'] = val(src, '医師名', '院長名');
+  row['診療日'] = normalizeDayList(val(src, '営業曜日', '診療日'));
+  row['休診日'] = normalizeDayList(val(src, '休業日', '休診日'));
+  row['午前始'] = normalizeTime(val(src, '午前開始時間', '午前診療開始時間', '午前始'));
+  row['午前終'] = normalizeTime(val(src, '午前終了時間', '午前診療終了時間', '午前終'));
+  row['午後始'] = normalizeTime(val(src, '午後開始時間', '午後診療開始時間', '午後始'));
+  row['午後終'] = normalizeTime(val(src, '午後終了時間', '午後診療終了時間', '午後終'));
   row['URL']    = val(src, 'クリニックURL');
   row['DF']     = '○';
   splitAddress(val(src, '住所'), row);
@@ -420,15 +432,15 @@ function normalizeDfRow(src) {
 
 function normalizeMdRow(src) {
   const row = createTemplate();
-  row['名前']   = val(src, '医院名');
-  row['Tel1']   = val(src, '電話番号');
-  row['記事名'] = val(src, '記事タイトル');
-  row['診療日'] = normalizeDayList(val(src, '営業曜日'));
+  row['名前']   = val(src, '医院名', '名前');
+  row['Tel1']   = val(src, '電話番号', 'Tel1', 'tel1');
+  row['記事名'] = val(src, '記事タイトル', '記事名');
+  row['診療日'] = normalizeDayList(val(src, '営業曜日', '診療日'));
   row['休診日'] = normalizeDayList(val(src, '休診日'));
-  row['午前始'] = normalizeTime(val(src, '午前診療開始時間'));
-  row['午前終'] = normalizeTime(val(src, '午前診療終了時間'));
-  row['午後始'] = normalizeTime(val(src, '午後診療開始時間'));
-  row['午後終'] = normalizeTime(val(src, '午後診療終了時間'));
+  row['午前始'] = normalizeTime(val(src, '午前診療開始時間', '午前開始時間', '午前始'));
+  row['午前終'] = normalizeTime(val(src, '午前診療終了時間', '午前終了時間', '午前終'));
+  row['午後始'] = normalizeTime(val(src, '午後診療開始時間', '午後開始時間', '午後始'));
+  row['午後終'] = normalizeTime(val(src, '午後診療終了時間', '午後終了時間', '午後終'));
   row['URL']    = val(src, 'ホームページ');
   splitAddress(val(src, '住所'), row);
   return row;
@@ -519,15 +531,10 @@ function mergeIntoCluster(cluster, incomingRow, sourceName) {
   cluster.sources.add(sourceName);
   cluster.sourceRows[sourceName] = incomingRow;
 
-  const priority = ['DF_MD', 'MD', 'DF', 'マイナビ'];
   const merged = {};
 
   OUTPUT_HEADERS.forEach(header => {
-    merged[header] = '';
-    for (let i = priority.length - 1; i >= 0; i--) {
-      const src = cluster.sourceRows[priority[i]];
-      if (src && hasValue(src[header])) { merged[header] = src[header]; break; }
-    }
+    merged[header] = pickByPriority(cluster.sourceRows, header);
   });
 
   cluster.row = merged;

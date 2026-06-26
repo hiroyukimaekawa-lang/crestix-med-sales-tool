@@ -526,27 +526,43 @@ function val(obj, ...keys) {
   return '';
 }
 
+function hasValue(v) {
+  return String(v || '').trim() !== '';
+}
+
+function pickByPriority(rowsBySource, col) {
+  const priority = col === '院長名'
+    ? ['df', 'mynavi', 'md']
+    : ['mynavi', 'df', 'md'];
+
+  for (const source of priority) {
+    const row = rowsBySource[source];
+    if (row && hasValue(row[col])) return row[col];
+  }
+  return '';
+}
+
 function normalizeRow(row, source) {
   if (source === 'df') {
     const addr = splitAddress(val(row, '住所'));
     return {
       UUID: '', 種別: '',
-      名前: val(row, '医院名'),
+      名前: val(row, '医院名', '名前'),
       カナ: '', 郵便番号: '',
       都道府県: addr.pref, 住所１: addr.rest, 住所２: '', 住所カナ: '',
-      Tel1: val(row, '電話番号'),
+      Tel1: val(row, '電話番号', 'Tel1', 'tel1'),
       Tel2: '', Tel3: '', Tel4: '', FAX: '',
       URL: val(row, 'クリニックURL'),
       備考: '', 旧社名: '', リードソース: '', BP検索: '', 旧進捗: '', 履歴: '',
       記事名: '',
-      休診日: val(row, '休業日'),
+      休診日: val(row, '休業日', '休診日'),
       午前始: val(row, '午前開始時間', '午前診療開始時間'),
       午前終: val(row, '午前終了時間', '午前診療終了時間'),
       午後始: val(row, '午後開始時間', '午後診療開始時間'),
       午後終: val(row, '午後終了時間', '午後診療終了時間'),
-      院長名: val(row, '医師名'),
+      院長名: val(row, '医師名', '院長名'),
       DF: '○',
-      診療日: val(row, '営業曜日'),
+      診療日: val(row, '営業曜日', '診療日'),
       _source: 'df'
     };
   }
@@ -555,14 +571,14 @@ function normalizeRow(row, source) {
     const addr = splitAddress(val(row, '住所'));
     return {
       UUID: '', 種別: '',
-      名前: val(row, '医院名'),
+      名前: val(row, '医院名', '名前'),
       カナ: '', 郵便番号: '',
       都道府県: addr.pref, 住所１: addr.rest, 住所２: '', 住所カナ: '',
-      Tel1: val(row, '電話番号'),
+      Tel1: val(row, '電話番号', 'Tel1', 'tel1'),
       Tel2: '', Tel3: '', Tel4: '', FAX: '',
       URL: val(row, 'ホームページ'),
       備考: '', 旧社名: '', リードソース: '', BP検索: '', 旧進捗: '', 履歴: '',
-      記事名: val(row, '記事タイトル'),
+      記事名: val(row, '記事タイトル', '記事名'),
       休診日: val(row, '休診日'),
       午前始: val(row, '午前診療開始時間', '午前開始時間'),
       午前終: val(row, '午前診療終了時間', '午前終了時間'),
@@ -570,7 +586,7 @@ function normalizeRow(row, source) {
       午後終: val(row, '午後診療終了時間', '午後終了時間'),
       院長名: '',
       DF: '',
-      診療日: val(row, '営業曜日'),
+      診療日: val(row, '営業曜日', '診療日'),
       _source: 'md'
     };
   }
@@ -661,18 +677,14 @@ function buildClusters(allRows) {
 /* ---- マージ（マイナビ > DF > MD）---- */
 
 function mergeCluster(rows) {
-  const priority = { md: 0, df: 1, mynavi: 2 };
-  const sorted   = [...rows].sort((a, b) => priority[a._source] - priority[b._source]);
   const sources  = new Set(rows.map(r => r._source));
+  const rowsBySource = {};
+  rows.forEach(row => { rowsBySource[row._source] = row; });
   const merged   = {};
 
-  for (const row of sorted) {
-    for (const col of OUTPUT_COLS) {
-      if (col === 'DF') continue;
-      const v = row[col];
-      if (v !== undefined && String(v).trim()) merged[col] = v;
-    }
-  }
+  OUTPUT_COLS.forEach(col => {
+    if (col !== 'DF') merged[col] = pickByPriority(rowsBySource, col);
+  });
 
   merged['DF'] = sources.has('df') ? '○' : (merged['DF'] || '');
 
