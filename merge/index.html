@@ -543,41 +543,55 @@
       files[key] = file;
       document.getElementById('status-' + key).textContent = '読み込み中...';
 
-      // BOM判定 → Shift-JIS or UTF-8
-      const binReader = new FileReader();
-      binReader.onload = (e) => {
-        const arr = new Uint8Array(e.target.result);
+      // ファイル全体をArrayBufferで読み込み、BOM→SJIS→UTF-8の順で判定
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const buf = e.target.result;
+        const arr = new Uint8Array(buf);
+
+        // ① UTF-8 BOMチェック（EF BB BF）
         const isUtf8Bom = arr[0] === 0xEF && arr[1] === 0xBB && arr[2] === 0xBF;
-        const encoding = isUtf8Bom ? 'UTF-8' : 'Shift-JIS';
-
-        const textReader = new FileReader();
-        textReader.onload = (e2) => {
-          let text = e2.target.result;
-          if (isUtf8Bom) text = text.replace(/^\uFEFF/, '');
-
+        if (isUtf8Bom) {
+          const text = new TextDecoder('utf-8').decode(buf).replace(/^\uFEFF/, '');
           const res = Papa.parse(text, { header: true, skipEmptyLines: true });
-
-          // SJISで読んで文字化けしていた場合はUTF-8で再試行
-          const firstHeader = Object.keys(res.data[0] || {})[0] || '';
-          const isMojibake = firstHeader.length > 0 && firstHeader.charCodeAt(0) > 60000;
-
-          if (!isUtf8Bom && isMojibake) {
-            const utf8Reader = new FileReader();
-            utf8Reader.onload = (e3) => {
-              const res2 = Papa.parse(e3.target.result.replace(/^\uFEFF/, ''), { header: true, skipEmptyLines: true });
-              parsed[key] = res2.data;
-              onParsed(key, file.name, res2.data.length);
-            };
-            utf8Reader.readAsText(file, 'UTF-8');
-            return;
-          }
-
           parsed[key] = res.data;
           onParsed(key, file.name, res.data.length);
-        };
-        textReader.readAsText(file, encoding);
+          return;
+        }
+
+        // ② BOMなし → まずShift-JISで試みる
+        let textSjis;
+        try {
+          textSjis = new TextDecoder('shift-jis').decode(buf);
+        } catch (_) {
+          // Shift-JISデコード失敗 → UTF-8で確定
+          const text = new TextDecoder('utf-8').decode(buf).replace(/^\uFEFF/, '');
+          const res = Papa.parse(text, { header: true, skipEmptyLines: true });
+          parsed[key] = res.data;
+          onParsed(key, file.name, res.data.length);
+          return;
+        }
+
+        // ③ Shift-JISでパースしてヘッダー全列を文字化けチェック
+        //    （1列目がASCIIのUUIDでも2列目以降の日本語列が化けていれば検知できる）
+        const resSjis = Papa.parse(textSjis, { header: true, skipEmptyLines: true });
+        const headers = Object.keys(resSjis.data[0] || {});
+        const hasMojibake = headers.some(h =>
+          [...h].some(c => c.charCodeAt(0) > 0xF000)
+        );
+
+        if (hasMojibake) {
+          // UTF-8で再デコード
+          const textUtf8 = new TextDecoder('utf-8').decode(buf).replace(/^\uFEFF/, '');
+          const resUtf8 = Papa.parse(textUtf8, { header: true, skipEmptyLines: true });
+          parsed[key] = resUtf8.data;
+          onParsed(key, file.name, resUtf8.data.length);
+        } else {
+          parsed[key] = resSjis.data;
+          onParsed(key, file.name, resSjis.data.length);
+        }
       };
-      binReader.readAsArrayBuffer(file.slice(0, 3));
+      reader.readAsArrayBuffer(file); // ファイル全体を読む
     }
 
     function onParsed(key, filename, count) {
