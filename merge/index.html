@@ -106,7 +106,7 @@
 
     @media (max-width: 600px) {
       .upload-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, 1fr);
       }
     }
 
@@ -523,7 +523,7 @@
     const OUTPUT_HEADERS = [
       'UUID', '種別', '名前', 'カナ', '郵便番号', '都道府県', '住所１', '住所２', '住所カナ',
       'Tel1', 'Tel2', 'Tel3', 'Tel4', 'FAX', 'URL', '備考', '旧社名', 'リードソース', '履歴',
-      '記事名', '休診日', '診療日', '午前始', '午前終', '午後始', '午後終', '院長名', '開業日'
+      '記事名', '休診日', '診療日', '午前始', '午前終', '午後始', '午後終', '院長名', 'DF', '開業日'
     ];
 
     const OUTPUT_SHEETS = [
@@ -643,7 +643,7 @@
     }
 
     /* =====================================================
-       行正規化（媒体ごと）
+       行正規化（全媒体共通）
     ===================================================== */
     function createTemplate() {
       const r = {};
@@ -651,48 +651,20 @@
       return r;
     }
 
-    function normalizeDfRow(src) {
+    // 全媒体共通の正規化関数（OUTPUT_HEADERSをそのままコピー＋旧ヘッダー名フォールバック）
+    function normalizeRow(src) {
       const row = createTemplate();
-      // 実データCSVはすでにOUTPUT_HEADERSと同じ列名なのでそのままコピー
       OUTPUT_HEADERS.forEach(h => { row[h] = val(src, h); });
-      // フォールバック: 旧ヘッダー名にも対応
-      if (!row['名前']) row['名前'] = val(src, '医院名');
-      if (!row['Tel1']) row['Tel1'] = val(src, '電話番号');
+      // 旧ヘッダー名フォールバック
+      if (!row['名前'])   row['名前']   = val(src, '医院名');
+      if (!row['Tel1'])   row['Tel1']   = val(src, '電話番号');
       if (!row['院長名']) row['院長名'] = val(src, '医師名');
-      if (!row['URL']) row['URL'] = val(src, 'クリニックURL');
-      if (!row['診療日']) row['診療日'] = normalizeDayList(val(src, '営業曜日'));
-      if (!row['休診日']) row['休診日'] = normalizeDayList(val(src, '休業日'));
-      if (!row['午前始']) row['午前始'] = normalizeTime(val(src, '午前開始時間'));
-      if (!row['午前終']) row['午前終'] = normalizeTime(val(src, '午前終了時間'));
-      if (!row['午後始']) row['午後始'] = normalizeTime(val(src, '午後開始時間'));
-      if (!row['午後終']) row['午後終'] = normalizeTime(val(src, '午後終了時間'));
-      if (!row['都道府県'] && !row['住所１']) splitAddress(val(src, '住所'), row);
-      row['休診日'] = normalizeDayList(row['休診日']);
-      row['診療日'] = normalizeDayList(row['診療日']);
-      row['午前始'] = normalizeTime(row['午前始']);
-      row['午前終'] = normalizeTime(row['午前終']);
-      row['午後始'] = normalizeTime(row['午後始']);
-      row['午後終'] = normalizeTime(row['午後終']);
-      return row;
-    }
-
-    function normalizeMdRow(src) {
-      const row = createTemplate();
-      OUTPUT_HEADERS.forEach(h => { row[h] = val(src, h); });
-      // フォールバック: 旧ヘッダー名にも対応
-      if (!row['名前']) row['名前'] = val(src, '医院名');
-      if (!row['Tel1']) row['Tel1'] = val(src, '電話番号');
+      if (!row['URL'])    row['URL']    = val(src, 'クリニックURL', 'ホームページ');
       if (!row['記事名']) row['記事名'] = val(src, '記事タイトル');
-      if (!row['URL']) row['URL'] = val(src, 'ホームページ');
-      if (!row['診療日']) row['診療日'] = normalizeDayList(val(src, '営業曜日'));
-      if (!row['休診日']) row['休診日'] = normalizeDayList(val(src, '休診日'));
-      if (!row['午前始']) row['午前始'] = normalizeTime(val(src, '午前診療開始時間'));
-      if (!row['午前終']) row['午前終'] = normalizeTime(val(src, '午前診療終了時間'));
-      if (!row['午後始']) row['午後始'] = normalizeTime(val(src, '午後診療開始時間'));
-      if (!row['午後終']) row['午後終'] = normalizeTime(val(src, '午後診療終了時間'));
       if (!row['都道府県'] && !row['住所１']) splitAddress(val(src, '住所'), row);
+      // 正規化
       row['休診日'] = normalizeDayList(row['休診日']);
-      row['診療日'] = normalizeDayList(row['診療日']);
+      row['診療日'] = normalizeDayList(row['診療日'] || val(src, '営業曜日'));
       row['午前始'] = normalizeTime(row['午前始']);
       row['午前終'] = normalizeTime(row['午前終']);
       row['午後始'] = normalizeTime(row['午後始']);
@@ -700,30 +672,10 @@
       return row;
     }
 
-    function normalizeMynaviRow(src) {
-      const row = createTemplate();
-      OUTPUT_HEADERS.forEach(h => { row[h] = val(src, h); });
-      row['休診日'] = normalizeDayList(row['休診日']);
-      row['診療日'] = normalizeDayList(row['診療日']);
-      row['午前始'] = normalizeTime(row['午前始']);
-      row['午前終'] = normalizeTime(row['午前終']);
-      row['午後始'] = normalizeTime(row['午後始']);
-      row['午後終'] = normalizeTime(row['午後終']);
-      return row;
-    }
-
-    // DF_MD: OUTPUT_HEADERSと同じ列構成のためそのままコピー
-    function normalizeDfmdRow(src) {
-      const row = createTemplate();
-      OUTPUT_HEADERS.forEach(h => { row[h] = val(src, h); });
-      row['休診日'] = normalizeDayList(row['休診日']);
-      row['診療日'] = normalizeDayList(row['診療日']);
-      row['午前始'] = normalizeTime(row['午前始']);
-      row['午前終'] = normalizeTime(row['午前終']);
-      row['午後始'] = normalizeTime(row['午後始']);
-      row['午後終'] = normalizeTime(row['午後終']);
-      return row;
-    }
+    function normalizeDfRow(src)     { return normalizeRow(src); }
+    function normalizeMdRow(src)     { return normalizeRow(src); }
+    function normalizeMynaviRow(src) { return normalizeRow(src); }
+    function normalizeDfmdRow(src)   { return normalizeRow(src); }
 
     /* =====================================================
        統合ロジック（GASと同等）
@@ -733,20 +685,19 @@
       const phoneMap = new Map();
       const addressMap = new Map();
 
-      // 優先順位が低い順に投入（MD → DF → DF_MD[DF+MD両方] → マイナビ）
+      // 優先順位が低い順に投入（MD → DF → DF_MD[DF+MD両方として] → マイナビ）
       ingestRows(mdRows,     'MD',      clusters, phoneMap, addressMap);
       ingestRows(dfRows,     'DF',      clusters, phoneMap, addressMap);
-      ingestRows(dfmdRows,   'DF',      clusters, phoneMap, addressMap, normalizeDfmdRow);
-      ingestRows(dfmdRows,   'MD',      clusters, phoneMap, addressMap, normalizeDfmdRow);
+      ingestRows(dfmdRows,   'DF',      clusters, phoneMap, addressMap);
+      ingestRows(dfmdRows,   'MD',      clusters, phoneMap, addressMap);
       ingestRows(mynaviRows, 'マイナビ', clusters, phoneMap, addressMap);
 
       return clusters.map(finalizeCluster);
     }
 
-    function ingestRows(rows, sourceName, clusters, phoneMap, addressMap, normalizeFn) {
+    function ingestRows(rows, sourceName, clusters, phoneMap, addressMap) {
       rows.forEach(src => {
-        const normalized = normalizeFn ? normalizeFn(src)
-          : sourceName === 'DF' ? normalizeDfRow(src)
+        const normalized = sourceName === 'DF' ? normalizeDfRow(src)
           : sourceName === 'MD' ? normalizeMdRow(src)
           : normalizeMynaviRow(src);
 
@@ -807,6 +758,8 @@
     }
 
     function finalizeCluster(cluster) {
+      // DF列: DFソースが存在するレコードは強制的に○
+      cluster.row['DF'] = cluster.sources.has('DF') ? '○' : '';
       return {
         row: OUTPUT_HEADERS.map(h => cluster.row[h] || ''),
         sourceSet: new Set(Array.from(cluster.sources))
