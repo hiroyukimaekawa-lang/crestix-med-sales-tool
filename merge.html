@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>3媒体統合ツール | 第一営業部</title>
+  <title>4媒体統合ツール | 第一営業部</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <style>
     *,
@@ -100,7 +100,7 @@
     /* Upload */
     .upload-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(4, 1fr);
       gap: 10px;
     }
 
@@ -187,7 +187,7 @@
     /* Stats */
     .stats-row {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(5, 1fr);
       gap: 10px;
       margin-bottom: 1rem;
     }
@@ -429,8 +429,8 @@
 
     <header>
       <div class="app-label"><a href="../">← ツールポータルに戻る</a></div>
-      <h1>3媒体統合ツール</h1>
-      <p class="subtitle">DF・MD・マイナビの課金リストを統合し、重複判定・媒体別分類（7パターン）を行います</p>
+      <h1>4媒体統合ツール</h1>
+      <p class="subtitle">DF・MD・DF_MD・マイナビの課金リストを統合し、重複判定・媒体別分類（7パターン）を行います</p>
     </header>
 
     <div class="card">
@@ -452,6 +452,15 @@
             <div class="upload-name">MD課金リスト</div>
             <div class="upload-status" id="status-md">クリックして選択</div>
             <input type="file" accept=".csv" onchange="handleFile('md', this)">
+          </label>
+        </div>
+
+        <div class="upload-item" id="box-dfmd">
+          <label>
+            <div class="upload-icon">📄</div>
+            <div class="upload-name">DF_MD</div>
+            <div class="upload-status" id="status-dfmd">クリックして選択</div>
+            <input type="file" accept=".csv" onchange="handleFile('dfmd', this)">
           </label>
         </div>
 
@@ -479,6 +488,10 @@
         <div class="stat">
           <div class="stat-label">MD</div>
           <div class="stat-value" id="stat-md">—</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">DF_MD</div>
+          <div class="stat-value" id="stat-dfmd">—</div>
         </div>
         <div class="stat">
           <div class="stat-label">マイナビ</div>
@@ -520,8 +533,8 @@
     /* =====================================================
        ファイル読み込み
     ===================================================== */
-    const files = { df: null, md: null, mynavi: null };
-    const parsed = { df: [], md: [], mynavi: [] };
+    const files = { df: null, md: null, dfmd: null, mynavi: null };
+    const parsed = { df: [], md: [], dfmd: [], mynavi: [] };
     let results = {};
 
     function handleFile(key, input) {
@@ -574,7 +587,7 @@
     }
 
     function updateRunBtn() {
-      const hasAny = files.df || files.md || files.mynavi;
+      const hasAny = files.df || files.md || files.dfmd || files.mynavi;
       document.getElementById('run-btn').disabled = !hasAny;
     }
 
@@ -699,27 +712,43 @@
       return row;
     }
 
+    // DF_MD: OUTPUT_HEADERSと同じ列構成のためそのままコピー
+    function normalizeDfmdRow(src) {
+      const row = createTemplate();
+      OUTPUT_HEADERS.forEach(h => { row[h] = val(src, h); });
+      row['休診日'] = normalizeDayList(row['休診日']);
+      row['診療日'] = normalizeDayList(row['診療日']);
+      row['午前始'] = normalizeTime(row['午前始']);
+      row['午前終'] = normalizeTime(row['午前終']);
+      row['午後始'] = normalizeTime(row['午後始']);
+      row['午後終'] = normalizeTime(row['午後終']);
+      return row;
+    }
+
     /* =====================================================
        統合ロジック（GASと同等）
     ===================================================== */
-    function mergeAllSources(dfRows, mdRows, mynaviRows) {
+    function mergeAllSources(dfRows, mdRows, dfmdRows, mynaviRows) {
       const clusters = [];
       const phoneMap = new Map();
       const addressMap = new Map();
 
-      // 優先順位が低い順に投入（MD → DF → マイナビ）
-      ingestRows(mdRows, 'MD', clusters, phoneMap, addressMap);
-      ingestRows(dfRows, 'DF', clusters, phoneMap, addressMap);
+      // 優先順位が低い順に投入（MD → DF → DF_MD[DF+MD両方] → マイナビ）
+      ingestRows(mdRows,     'MD',      clusters, phoneMap, addressMap);
+      ingestRows(dfRows,     'DF',      clusters, phoneMap, addressMap);
+      ingestRows(dfmdRows,   'DF',      clusters, phoneMap, addressMap, normalizeDfmdRow);
+      ingestRows(dfmdRows,   'MD',      clusters, phoneMap, addressMap, normalizeDfmdRow);
       ingestRows(mynaviRows, 'マイナビ', clusters, phoneMap, addressMap);
 
       return clusters.map(finalizeCluster);
     }
 
-    function ingestRows(rows, sourceName, clusters, phoneMap, addressMap) {
+    function ingestRows(rows, sourceName, clusters, phoneMap, addressMap, normalizeFn) {
       rows.forEach(src => {
-        const normalized = sourceName === 'DF' ? normalizeDfRow(src)
+        const normalized = normalizeFn ? normalizeFn(src)
+          : sourceName === 'DF' ? normalizeDfRow(src)
           : sourceName === 'MD' ? normalizeMdRow(src)
-            : normalizeMynaviRow(src);
+          : normalizeMynaviRow(src);
 
         const phoneKey = buildPhoneKey(normalized['Tel1']);
         const addressKey = buildAddressKey(normalized['都道府県'], normalized['住所１'], normalized['住所２']);
@@ -819,14 +848,11 @@
     }
 
     function _run() {
-      const dfRows = parsed.df.map(normalizeDfRow);     // 正規化
-      const mdRows = parsed.md.map(normalizeMdRow);
-      const mynaviRows = parsed.mynavi.map(normalizeMynaviRow);
-
       // 統合
       const merged = mergeAllSources(
         parsed.df,
         parsed.md,
+        parsed.dfmd,
         parsed.mynavi
       );
 
@@ -835,12 +861,13 @@
       // Stats
       document.getElementById('stat-df').textContent = parsed.df.length || '—';
       document.getElementById('stat-md').textContent = parsed.md.length || '—';
+      document.getElementById('stat-dfmd').textContent = parsed.dfmd.length || '—';
       document.getElementById('stat-mv').textContent = parsed.mynavi.length || '—';
       document.getElementById('stat-total').textContent = merged.length;
 
       // Log
       const logs = [];
-      logs.push({ text: `DF: ${parsed.df.length}件 / MD: ${parsed.md.length}件 / マイナビ: ${parsed.mynavi.length}件`, cls: 'info' });
+      logs.push({ text: `DF: ${parsed.df.length}件 / MD: ${parsed.md.length}件 / DF_MD: ${parsed.dfmd.length}件 / マイナビ: ${parsed.mynavi.length}件`, cls: 'info' });
       logs.push({ text: `統合後ユニーク件数: ${merged.length}件`, cls: 'ok' });
       OUTPUT_SHEETS.forEach(s => {
         logs.push({ text: `${s}: ${results[s].length}件`, cls: '' });
